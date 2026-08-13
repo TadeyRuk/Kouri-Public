@@ -1,259 +1,258 @@
 # Kouri
 
 <p align="center">
-  <img src="assets/LOGO.png" alt="Kouri Logo" width="120" />
+  <img src="assets/kouri-tree-roots-logo.png" alt="Kouri Logo" width="420" />
 </p>
 
 <p align="center">
-  <strong>Intelligence, Modularized.</strong><br />
-  A privacy-first intelligence layer — multi-agent orchestration, on-device memory, and local inference via Ollama.<br />
-  Less assistant. More cognitive operating system.<br />
-  Built by Tadey.
+  <strong>Privacy-first, on-device AI companion.</strong><br />
+  Local inference via Ollama (<code>qwen3.5:4b</code>). Built by Tadey.
 </p>
 
-<p align="center">
-  <a href="https://kouri-rukkan.vercel.app/"><strong>Rukkan → Private Access</strong></a>
-  ·
-  <a href="https://github.com/TadeyRuk/Kouri-Public/wiki">Wiki</a>
-</p>
-
-| Private Access | Chat |
+| Desktop | Mobile |
 |:---:|:---:|
-| ![Rukkan Private Access at kouri-rukkan.vercel.app](assets/screenshots/kouri-private-access.png) | ![Kouri chat workspace](assets/screenshots/kouri-chat.png) |
-
-<p align="center"><em>Live Private Access surface: <a href="https://kouri-rukkan.vercel.app/">kouri-rukkan.vercel.app</a></em></p>
+| ![Desktop UI](assets/screenshots/kouri-v3-final-dark.png) | ![Mobile UI](assets/screenshots/kouri-v3-mobile.png) |
 
 ---
 
-## What Kouri is
+## What this is
 
-Kouri is a privacy-first intelligence layer designed to route complex tasks across specialized local models and behavioral logic. By merging multi-agent orchestration with persistent on-device memory, it evolves beyond a simple chatbot into a cognitive operating system — learning your patterns, securing your data, and integrating into daily workflows without exposing sensitive context to the cloud.
+Kouri is a local AI companion: chat, memory, folder-scoped RAG, optional Gmail, and a multi-agent path — all through a Flask API that frontends talk to. Inference stays on-device via Ollama. No cloud LLM calls.
 
-Rukkan is the private web workspace for Kouri: a personal AI environment, not a public SaaS product.
-
----
-
-## Design philosophy
-
-Kouri is built around five principles:
-
-1. **Modular over monolithic**
-2. **Local-first architecture**
-3. **Behavior-driven intelligence**
-4. **Task-specialized models**
-5. **User sovereignty over data**
-
-It is less "assistant" and more "cognitive operating system."
+This README is the **technical source of truth**: how the system is shaped today, how to run it, and what to improve next.
 
 ---
 
 ## Architecture
 
-UIs stay thin. Capability lives on the Flask hub and local modules. Inference stays on-device via Ollama.
-
-```mermaid
-flowchart TB
-  subgraph clients [Clients]
-    WEB["kouri-react<br/>Vite :5173 or static"]
-    CLI["kouri-cli<br/>Node TUI"]
-    MOB["KouriApp<br/>Expo beta"]
-  end
-
-  subgraph hub [Kouri Hub]
-    SERVER["K_Server/server.py<br/>Flask + SocketIO :5000"]
-  end
-
-  subgraph core [Core modules]
-    BE["Kouri Core<br/>backend/Kouri_backend.py"]
-    MEM["KouriMemory<br/>data/*.json"]
-    RAG["KouriVault<br/>K_File_Search/"]
-    AG["K_Agents<br/>multi-agent team"]
-    MAIL["K_Gmail_Module<br/>optional"]
-    FORTE["Forte skills<br/>data/forte_skills.json"]
-  end
-
-  OLL["Ollama :11434"]
-
-  subgraph satellites [Satellites]
-    WAKE["kouri-wake<br/>Hey Kouri"]
-    MON["kouri-monitor<br/>Pulse-like"]
-  end
-
-  WEB -->|"HTTP + Socket.IO"| SERVER
-  CLI -->|REST| SERVER
-  MOB -.->|"partially wired"| SERVER
-
-  SERVER --> BE
-  SERVER --> RAG
-  SERVER --> AG
-  SERVER --> MAIL
-  SERVER --> MEM
-  SERVER --> FORTE
-
-  BE --> OLL
-  RAG --> OLL
-  AG --> OLL
-  MAIL --> OLL
-
-  WAKE -.-> clients
-  MON -.-> clients
+```
+UIs:  kouri-react  |  kouri-cli  |  KouriApp  |  kouri-wake
+                    │
+                    ▼
+          K_Server/server.py   (Flask + SocketIO, :5000)
+                    │
+     ┌──────────────┼──────────────┬──────────────┐
+     ▼              ▼              ▼              ▼
+ backend/      K_File_Search/   K_Agents/    K_Gmail_Module/
+ Kouri_backend   (RAG)         (team)       (optional)
+     │
+     ▼
+ Ollama  (http://127.0.0.1:11434)
 ```
 
 | Layer | Path | Role |
 | :--- | :--- | :--- |
-| **Hub** | `K_Server/server.py` | Routes, SocketIO streaming, static React build, wires modules |
-| **Core** | `backend/Kouri_backend.py` | Prompts, dual memory, Ollama generate/stream |
-| **Vault** | `K_File_Search/` | Folder-scoped RAG (FAISS + embeddings) |
+| **API hub** | `K_Server/server.py` | Routes, SocketIO streaming, static React build, wires modules |
+| **Brain** | `backend/Kouri_backend.py` | Prompts, memory, Ollama generate/stream, mode switch |
+| **RAG** | `K_File_Search/` | Folder-scoped index/query, path whitelist, FAISS + embeddings |
 | **Agents** | `K_Agents/` | Orchestrator / researcher / strategist / evaluator |
-| **Mail** | `K_Gmail_Module/` | Optional Gmail read/summarize |
-| **Web** | `kouri-react/` | Primary UI |
-| **TUI** | `kouri-cli/` | Terminal UI |
-| **Mobile** | `KouriApp/` | Expo shell (beta) |
-| **Wake** | `kouri-wake/` | Optional wake-word daemon |
-| **Data** | `data/` | Memory, injects, settings, Forte skills |
+| **Mail** | `K_Gmail_Module/` | Optional Gmail read/summarize (OAuth) |
+| **Web** | `kouri-react/` | Primary UI (Vite → builds into `K_Server/static/`) |
+| **TUI** | `kouri-cli/` | Node + blessed terminal UI |
+| **Mobile** | `KouriApp/` | Expo / React Native (beta) |
+| **Wake** | `kouri-wake/` | “Hey Kouri” daemon (Porcupine) |
+| **Data** | `data/` | Memory JSON, injects, prompts, settings |
+
+**Design rule:** UIs stay thin. New capability lands as a module + API surface on `K_Server`, not as frontend-only logic.
 
 ---
 
-## Surfaces
+## Stack (actual)
 
-### Web — Intelligent interaction. Seamless execution.
-
-`kouri-react` is the primary surface: streaming chat over Socket.IO, sessions, RAG reader, settings/memory, and Forte skills. Dev runs on `:5173` (proxied to the hub); production builds land in `K_Server/static/` and are served from `:5000`.
-
-Live private workspace: [kouri-rukkan.vercel.app](https://kouri-rukkan.vercel.app/).
-
-### TUI — Always in the terminal.
-
-`kouri-cli` (Node + blessed) talks REST to the hub: dashboard menu, inline chat, and `/read` for RAG browse/index/query.
-
-### Mobile — Always within reach. Always private.
-
-`KouriApp` (Expo / React Native) is the mobile shell. Layout and local session UI exist; full hub wiring is still maturing — treat as beta, not the source of truth for features.
-
----
-
-## Modules (in depth)
-
-### Kouri Hub — `K_Server/`
-
-Central API composition root. Flask + Flask-SocketIO on port `5000`.
-
-- **Chat:** Socket.IO `message` → streamed `token` / `think_token` / `done` / `error`; also `POST /chat`
-- **RAG / files:** `/rag/index`, `/rag/query`, `/files/read`
-- **Agents:** `/agents/run`, `/agents/chat`, `/agents/info`
-- **Email:** `/email/fetch`, `/email/summarize` (optional)
-- **Settings / memory / Forte:** `/settings*`, `/forte/skills`
-- **Health / remote:** `/health`, `/remote/chat`
-- Serves the Vite-built React app from `static/`
-
-**Status:** Active — the spine of the system.
-
-### Kouri Core — `backend/Kouri_backend.py`
-
-The reasoning brain behind chat.
-
-- Builds prompts from persona injects, dual memory, and context classification
-- Streams generation through Ollama (`/api/generate`); default model `qwen3.5:4b` (`KOURI_MODEL`)
-- Dual modes: normal companion vs copilot/coding memory files
-- Greeting/intro dedupe, emoji policy, task routing
-- Optional Gemini path only when the selected model name starts with `gemini` (escape hatch — not the default)
-
-**Status:** Active.
-
-### KouriMemory — `data/`
-
-Persistent local context — not a cloud profile store.
-
-- `kouri_memory.json` / `kouri_memory_copilot.json` — dual conversation histories
-- `injects.json` — tone, name, personality traits injected into prompts
-- `kouri_settings.json` — model and client settings
-- Exposed in the web UI Memory / Settings panels
-
-**Status:** Active. Memory is local JSON (sovereignty over polish).
-
-### KouriVault — `K_File_Search/`
-
-Folder-scoped RAG — semantic retrieval over *your* files, not an encrypted secrets locker.
-
-- Path whitelist (`path_guard.py`) so indexing stays inside approved roots
-- Format-aware chunking (Markdown, Python AST, JSON-aware, etc.)
-- Embeddings via `all-MiniLM-L6-v2`; vectors in FAISS (`IndexFlatIP`)
-- Index cache under `~/.kouri/rag_index/`
-- Query path retrieves chunks and answers via Ollama
-
-**Status:** Active.
-
-### Multi-agent team — `K_Agents/`
-
-Message-bus coordination for harder tasks.
-
-- `orchestrator` routes work across `researcher`, `strategist`, and `evaluator`
-- Agents talk to Ollama via `/api/chat`
-- Public API: `agent_team.py` → hub routes `/agents/*`
-
-**Status:** Active.
-
-### Forte — skills layer
-
-Named skills stored in `data/forte_skills.json`, managed through `/forte/skills` and the web Forte view. Activate in chat with `/skillname`-style workflows.
-
-**Status:** Active.
-
-### Gmail satellite — `K_Gmail_Module/`
-
-Read-only Gmail via OAuth (`gmail.readonly`). Fetch metadata through the hub; summarize with local Ollama. Cloud-adjacent by nature — optional, not part of the zero-cloud core.
-
-**Status:** Optional / Active when credentials are present.
-
-### kouri-wake — wake word
-
-“Hey Kouri” daemon: Porcupine detection, edge-light socket (`/tmp/kouri_edge.sock`), chime feedback. Runs as its own process (optional systemd service); does not replace the hub.
-
-**Status:** Optional.
-
-### kouri-monitor — Pulse-adjacent
-
-Host health poller (CPU, RAM, disk, temp, battery, …) with desktop notifications. Closest real implementation to marketing “KouriPulse.”
-
-**Status:** Optional satellite.
-
----
-
-### Expanding / not fully shipped
-
-These names appear in product/marketing language. Be honest about what exists today:
-
-| Name | Reality today |
+| Piece | Reality |
 | :--- | :--- |
-| **KouriLink** | No dedicated sync module — clients use Socket.IO/REST to the hub |
-| **KouriSense** | Analytics / perception concepts; scraps only (e.g. usage predictor experiments) |
-| **KouriPulse** | Closest match: `kouri-monitor/` — not a full agent-swarm supervisor |
-| **KouriDevTools** | Debug routes / UI stubs; not a finished IDE toolkit |
-| **KouriCloud** | No sync/backup product — optional Gemini path is the only cloud LLM escape hatch |
-| **KouriVision** | Unfinished — do not treat as shipped |
+| LLM | Ollama — default `qwen3.5:4b` (`KOURI_MODEL`, `KOURI_RAG_MODEL`) |
+| API | Flask + Flask-SocketIO |
+| Web | React 19 + Vite + TypeScript |
+| TUI | Node.js + `blessed` (`kouri-cli`) |
+| RAG | Custom pipeline (`K_File_Search`), index cache under `~/.kouri/rag_index/` |
+| Memory | Local JSON — normal + copilot dual files |
+| License | AGPL-3.0 |
 
----
-
-## Privacy model
-
-- **Inference:** local Ollama by default (`qwen3.5:4b`)
-- **Memory & prompts:** stay on-device
-- **Telemetry:** none by design
-- **Exceptions:** optional satellites (e.g. Gmail OAuth) are cloud-adjacent and not part of the zero-cloud core
+Not claimed here: FastAPI, Electron desktop app, or a finished vision product. Those are either absent or unfinished.
 
 ---
 
 ## Quick start
 
-Prerequisites: Python 3.10+, Node.js 18+, and [Ollama](https://ollama.com) running locally.
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- Ollama running at `http://127.0.0.1:11434`
+- Model pulled:
 
 ```bash
 ollama pull qwen3.5:4b
 ```
 
-Clone this repository, then follow the [wiki](https://github.com/TadeyRuk/Kouri-Public/wiki) for run instructions (API on `:5000`, web UI on `:5173`).
+### One-shot (recommended)
 
-For the live private workspace: [https://kouri-rukkan.vercel.app/](https://kouri-rukkan.vercel.app/)
+```bash
+bash start-kouri.sh
+```
+
+Starts Flask on `:5000` and Vite on `:5174`.
+
+> **Known bug:** `start-kouri.sh` still mentions `gemma3:4b` in the Ollama-down message. Default model in code is `qwen3.5:4b`. Fix that when touching the script.
+
+### Manual
+
+```bash
+# Terminal 1 — API (serves React build + all endpoints)
+cd K_Server && python server.py
+
+# Terminal 2 — Web UI
+cd kouri-react && npm install && npm run dev
+```
+
+- Dev UI: `http://localhost:5174` (proxies API to `:5000`)
+- Production-style: `npm run build` in `kouri-react`, then open `http://localhost:5000`
+
+### Optional entry points
+
+```bash
+# TUI
+cd kouri-cli && npm install && npm link && kouri
+
+# Wake-word daemon
+cd kouri-wake && pip install -r requirements.txt && python main.py
+```
+
+There is also a simpler Python launcher in `kouri_cli/` — prefer `kouri-cli/` for the full TUI.
+
+---
+
+## Core capabilities (status)
+
+| Capability | Status | Notes |
+| :--- | :--- | :--- |
+| Chat + SocketIO streaming | Active | `/chat`, `socket.on("message")` |
+| Dual memory (normal / copilot) | Active | `data/kouri_memory*.json` |
+| Prompt injects / persona | Active | `data/injects.json`, `data/kouri_prompts.json` |
+| Folder-scoped RAG | Active | `/rag/index`, `/rag/query`, path guard |
+| Multi-agent team | Active | `/agents/*` |
+| Gmail fetch / summarize | Active (optional) | Needs local OAuth creds; cloud-adjacent |
+| Web UI | Active | Primary surface |
+| TUI | Active | Second surface |
+| Mobile app | Beta | Not the source of truth for features yet |
+| Wake word | Optional | Separate daemon |
+| Vision / Sense / Predictor | Incomplete / experimental | Do not treat as shipped |
+
+---
+
+## Privacy model
+
+- **Inference:** local Ollama only for the core companion loop.
+- **Memory / prompts:** local JSON under `data/` (and some legacy copies elsewhere — see debt).
+- **Telemetry:** none by design.
+- **Exception:** Gmail uses Google OAuth when enabled. Treat mail as an optional satellite, not part of the zero-cloud core.
+
+---
+
+## Technical improvement backlog
+
+Work top-down. Architecture direction is fine; execution and boundaries need tightening.
+
+### Roadmap (Gantt)
+
+Relative timeline from “now.” Adjust dates when you actually schedule the work.
+
+```mermaid
+gantt
+    title Kouri technical improvement roadmap
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+    todayMarker off
+
+    section P0 — Core reliability
+    Single model source of truth           :p0a, 2026-07-20, 2d
+    Declare Python deps (requirements)     :p0b, after p0a, 3d
+    Canonical start path only              :p0c, 2026-07-20, 2d
+    Smoke tests (health/chat/RAG/memory)   :p0d, after p0b, 5d
+
+    section P1 — Tighten the hub
+    Split server.py into blueprints        :p1a, after p0d, 7d
+    Real packages / drop sys.path hacks    :p1b, after p1a, 5d
+    Consolidate memory JSON locations      :p1c, after p0d, 4d
+    Pick one CLI (archive kouri_cli)       :p1d, after p0c, 2d
+
+    section P2 — Scope discipline
+    Freeze core vs satellite contract      :p2a, after p1a, 3d
+    Repo hygiene (root clutter)            :p2b, after p1d, 3d
+    Frontend stream/error tests            :p2c, after p0d, 5d
+    Document/stabilize public API routes   :p2d, after p2a, 5d
+
+    section P3 — Product edges
+    Ollama-down UX (web + CLI)             :p3a, after p2c, 4d
+    Settings: model / URL / RAG roots      :p3b, after p2d, 5d
+    Mobile after API is boring             :p3c, after p3b, 14d
+    Vision / Sense — finish or cut         :p3d, after p3c, 7d
+```
+
+### P0 — Make the core reliable
+
+1. **Single model source of truth** — align `start-kouri.sh`, README, and `KOURI_MODEL` default (`qwen3.5:4b`).
+2. **Declare Python deps** — add `requirements.txt` or `pyproject.toml` for `K_Server` + backend (+ optional extras for RAG/Gmail). Today only `kouri-wake` / `kouri-monitor` ship requirements files.
+3. **One start path** — document and keep `start-kouri.sh` + `K_Server/server.py` as canonical; stop implying `backend/Kouri_backend.py` is the server.
+4. **Smoke tests** — `/health`, chat happy path, RAG index/query, memory mode switch. Wire into a minimal CI later.
+
+### P1 — Tighten the hub
+
+5. **Split `server.py`** — route blueprints / service layer: `chat`, `rag`, `agents`, `email`, `settings`, `remote`. Keep `server.py` as composition root only.
+6. **Real packages, not `sys.path` hacks** — installable local packages or a single `PYTHONPATH` convention from the root.
+7. **One memory location** — consolidate root / `K_Server` / `data` memory JSON so reads and writes cannot diverge.
+8. **Pick one CLI** — keep `kouri-cli`, archive or clearly demote `kouri_cli`.
+
+### P2 — Scope discipline
+
+9. **Freeze the core contract** before growing satellites:
+   - Core = chat + memory + streaming + settings
+   - Vault = RAG
+   - One primary UI = `kouri-react`
+   - Satellites = agents, Gmail, wake, mobile
+10. **Repo hygiene** — move scratch/personal files out of root; keep the tree looking like a product, not a desk.
+11. **Frontend tests** — cover send / stream / Ollama-down error path in `kouri-react`.
+12. **API stability** — version or document public routes the UIs depend on so mobile/TUI do not break silently.
+
+### P3 — Product-quality edges (later)
+
+13. Consistent Ollama-down UX across web + CLI.
+14. Clear settings for model, backend URL, RAG roots.
+15. Mobile only after core API is boring and stable.
+16. Vision / Sense / usage predictor — finish or cut from the mental model until real.
+
+### What not to do yet
+
+- Rewrite Flask → FastAPI “for modernity”
+- Add Electron before the web UI + API contract are solid
+- Grow more frontends before the hub is thin and tested
+- Market unfinished modules as Active
+
+---
+
+## Useful commands
+
+```bash
+# Backend unit smoke
+cd K_Server && python unit_test.py
+
+# RAG tests
+python -m pytest tests/test_folder_scoped_rag.py
+
+# Web
+cd kouri-react && npm run lint && npm run test && npm run build
+```
+
+Env knobs (server):
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `KOURI_MODEL` | `qwen3.5:4b` | Main chat model |
+| `KOURI_RAG_MODEL` | `qwen3.5:4b` | RAG generation model |
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama base URL |
+| `FLASK_PORT` | `5000` | API port |
+| `VITE_KOURI_BACKEND_URL` | (dev proxy) | Point Vite at the API |
 
 ---
 
