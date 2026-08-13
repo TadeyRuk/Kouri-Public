@@ -25,19 +25,50 @@ This README is the **technical source of truth**: how the system is shaped today
 
 ## Architecture
 
-```
-UIs:  kouri-react  |  kouri-cli  |  KouriApp  |  kouri-wake
-                    │
-                    ▼
-          K_Server/server.py   (Flask + SocketIO, :5000)
-                    │
-     ┌──────────────┼──────────────┬──────────────┐
-     ▼              ▼              ▼              ▼
- backend/      K_File_Search/   K_Agents/    K_Gmail_Module/
- Kouri_backend   (RAG)         (team)       (optional)
-     │
-     ▼
- Ollama  (http://127.0.0.1:11434)
+```mermaid
+flowchart TB
+  subgraph clients ["Clients"]
+    WEB["kouri-react<br/>Vite :5174"]
+    CLI["kouri-cli<br/>Node TUI"]
+    MOB["KouriApp<br/>Expo beta"]
+    WAKE["kouri-wake<br/>&quot;Hey Kouri&quot;"]
+  end
+
+  SERVER["K_Server/server.py<br/>Flask + SocketIO · :5000"]
+
+  subgraph core ["Core modules"]
+    BE["backend/Kouri_backend.py<br/>prompts · memory · mode switch"]
+    RAG["K_File_Search/<br/>folder-scoped RAG"]
+    AG["K_Agents/<br/>orchestrator · researcher · strategist · evaluator"]
+    MAIL["K_Gmail_Module/<br/>optional · OAuth"]
+  end
+
+  OLL["Ollama<br/>127.0.0.1:11434"]
+
+  WEB -->|HTTP + Socket.IO| SERVER
+  CLI -->|REST| SERVER
+  MOB -.->|partial| SERVER
+  WAKE -.-> SERVER
+
+  SERVER --> BE
+  SERVER --> RAG
+  SERVER --> AG
+  SERVER --> MAIL
+
+  BE --> OLL
+  RAG --> OLL
+  AG --> OLL
+  MAIL --> OLL
+
+  classDef client fill:#1e293b,stroke:#38bdf8,color:#e2e8f0
+  classDef hub fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe,stroke-width:2px
+  classDef core fill:#1e293b,stroke:#64748b,color:#e2e8f0
+  classDef infra fill:#14532d,stroke:#4ade80,color:#dcfce7
+
+  class WEB,CLI,MOB,WAKE client
+  class SERVER hub
+  class BE,RAG,AG,MAIL core
+  class OLL infra
 ```
 
 | Layer | Path | Role |
